@@ -5,36 +5,42 @@ import time
 import requests
 import re
 
-# تنبيه: يفضل وضع المفتاح في secrets.toml
+# تنبيه: يفضل وضع المفتاح في secrets.toml عند النشر
 GROQ_API_KEY = "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"
 
 def generate_with_groq(text_input, mode):
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-    safe_text = text_input[:7000].replace('"', "'")
+    # معالجة النص المرسل (زيادة الحجم لضمان استيعاب محتوى أكبر)
+    safe_text = text_input[:12000].replace('"', "'")
     
-    # تحديد التعليمات بناءً على الخيار المختار
-    if mode == "بنك أسئلة محلول":
-        instruction = "This text is a solved Q&A bank. Extract the questions and their correct answers. Return ONLY a JSON array."
-    elif mode == "بنك أسئلة غير محلول":
-        instruction = "This text is a question bank WITHOUT answers. Solve it yourself and provide the correct answers. Return ONLY a JSON array."
-    else: # محاضرة / ملف عادي
-        instruction = "This text is a lecture/document. Create comprehensive MCQs covering all important points. Return ONLY a JSON array."
+    # التعليمات بناءً على الخيار المختار مع تشديد على اللغة الإنجليزية
+    if mode == "Solved Q&A Bank":
+        instruction = "Extract ALL questions and answers from this solved bank. Everything MUST be in English."
+    elif mode == "Unsolved Q&A Bank":
+        instruction = "This is a question bank without answers. Solve it yourself. Everything MUST be in English."
+    else: # Normal Lecture / Data
+        instruction = (
+            "Act as an expert professor. Generate the MAXIMUM possible number of MCQs "
+            "covering every single detail and concept in this lecture. "
+            "Everything MUST be in English language only."
+        )
 
     prompt = (
         f"{instruction} "
-        "Format: [{\"question\": \"...\", \"options\": [\"Option 1\", \"Option 2\"], \"answer\": \"Option 1\"}]. "
+        "Return ONLY a JSON array. "
+        "Format: [{\"question\": \"...\", \"options\": [\"Option 1\", \"Option 2\", \"Option 3\", \"Option 4\"], \"answer\": \"Option 1\"}]. "
         f"Text: {safe_text}"
     )
     
     payload = {
         "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.2
+        "temperature": 0.3
     }
     
     try:
-        # تصحيح رابط الـ API للرابط الرسمي لـ Groq
-        response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
+        # استخدام رابط Groq الرسمي
+        response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=60)
         content = response.json()['choices'][0]['message']['content'].strip()
         match = re.search(r'\[.*\]', content, re.DOTALL)
         return json.loads(match.group(0)) if match else []
@@ -43,20 +49,30 @@ def generate_with_groq(text_input, mode):
 
 st.set_page_config(page_title="AREF AGENT | AI VISION", layout="centered")
 
-# --- استايل CSS (نفس اللي بعته بدون تغيير) ---
+# --- CSS Styling ---
 st.markdown("""
     <style>
     .stApp { background-image: url("https://wallpapercave.com/wp/wp9245517.jpg"); background-size: cover; background-attachment: fixed; }
     .stApp > div:first-child { background-color: rgba(0, 0, 0, 0.9); min-height: 100vh; }
+    
     @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
     .error-box { animation: shake 0.2s; border: 3px solid #ff4b4b !important; box-shadow: 0 0 30px #ff4b4b !important; }
+    
     @keyframes glow { 0%, 100% { box-shadow: 0 0 10px #00ffcc; } 50% { box-shadow: 0 0 30px #00ffcc; } }
     .success-box { animation: glow 1s infinite; border: 3px solid #00ffcc !important; }
+
     @keyframes pulse-red { 0%, 100% { color: #ff4b4b; text-shadow: 0 0 5px #ff4b4b; } 50% { color: #fff; text-shadow: 0 0 20px #ff4b4b; } }
     .timer-critical { animation: pulse-red 0.5s infinite; font-weight: bold; }
+
     .neon-title { color: #00d4ff; text-shadow: 0 0 20px #00d4ff; text-align: center; font-size: 4rem; font-weight: 900; }
     .question-card { background: rgba(15, 15, 15, 0.95); padding: 30px; border-radius: 20px; border: 1px solid #444; }
-    .status-container { display: flex; justify-content: space-around; align-items: center; background: rgba(0, 212, 255, 0.07); padding: 20px; border-radius: 20px; border: 1px solid rgba(0, 212, 255, 0.3); margin-bottom: 25px; backdrop-filter: blur(10px); }
+    
+    .status-container { 
+        display: flex; justify-content: space-around; align-items: center;
+        background: rgba(0, 212, 255, 0.07); padding: 20px; border-radius: 20px; 
+        border: 1px solid rgba(0, 212, 255, 0.3); margin-bottom: 25px; 
+        backdrop-filter: blur(10px);
+    }
     .stat-item { text-align: center; }
     .stat-label { font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
     .stat-value { font-size: 1.4rem; font-weight: bold; color: #00d4ff; }
@@ -72,29 +88,30 @@ if 'questions' not in st.session_state:
 
 st.markdown('<h1 class="neon-title">AREF AGENT</h1>', unsafe_allow_html=True)
 
-# --- الواجهة الأمامية مع الخيارات الثلاثة ---
+# --- Stage 1: Upload & Options ---
 if not st.session_state.questions and not st.session_state.is_finished:
-    # إضافة الخيارات الثلاثة هنا
-    data_mode = st.radio(
-        "اختر نوع البيانات المرفوعة:",
-        ["بنك أسئلة محلول", "بنك أسئلة غير محلول", "ملف محاضرة/بيانات عادية"],
+    # خيارات الواجهة باللغة الإنجليزية كما طلبت
+    data_mode = st.selectbox(
+        "SELECT DATA TYPE:",
+        ["Solved Q&A Bank", "Unsolved Q&A Bank", "Normal Lecture / Data"],
         index=2
     )
     
     file = st.file_uploader("UPLOAD SYSTEM DATA (PDF)", type="pdf")
     
     if file and st.button("ACTIVATE NEURAL LINK"):
-        with st.spinner("🧬 ANALYZING DATA..."):
+        with st.spinner("🧬 ANALYZING SYSTEM DATA..."):
             reader = PyPDF2.PdfReader(file)
-            full_text = "".join([p.extract_text() for p in reader.pages])
-            # نمرر نوع الخيار للدالة
-            data = generate_with_groq(full_text, data_mode)
+            text = "".join([p.extract_text() for p in reader.pages])
+            data = generate_with_groq(text, data_mode)
             if data:
                 st.session_state.questions = data
                 st.session_state.start_time = time.time()
                 st.rerun()
+            else:
+                st.error("FAILED TO GENERATE QUESTIONS. PLEASE TRY AGAIN.")
 
-# --- بقية الكود (الأسئلة والنتيجة) كما هو تماماً دون تغيير ---
+# --- Stage 2: Quiz Mode ---
 elif st.session_state.questions and not st.session_state.is_finished:
     idx = st.session_state.current_idx
     total = len(st.session_state.questions)
@@ -107,6 +124,7 @@ elif st.session_state.questions and not st.session_state.is_finished:
     t_class = "stat-value"
     if remaining_time <= 10: t_class += " timer-critical"
 
+    # Auto-fail on timeout
     if remaining_time == 0 and not st.session_state.answered:
         st.session_state.answered = True
         st.session_state.status = 'wrong'
@@ -168,9 +186,11 @@ elif st.session_state.questions and not st.session_state.is_finished:
         time.sleep(1)
         st.rerun()
 
+# --- Stage 3: Results ---
 else:
     score = st.session_state.score
     total_questions = len(st.session_state.questions)
+    
     st.markdown(f"""
         <div class='question-card' style='text-align:center;'>
             <h1>MISSION COMPLETE</h1>
