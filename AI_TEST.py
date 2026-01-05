@@ -10,7 +10,7 @@ GROQ_API_KEY = "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"
 
 def generate_with_groq(text_input, mode):
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-    safe_text = text_input[:7000].replace('"', "'")
+    safe_text = text_input[:15000].replace('"', "'")
     
     # تحديد التعليمات بناءً على الخيار المختار
     if mode == "Solved Q&A Bank":
@@ -46,7 +46,7 @@ st.set_page_config(page_title="AREF AGENT | AI VISION", layout="centered")
 # --- استايل CSS (نفس اللي بعته بدون تغيير) ---
 st.markdown("""
     <style>
-    .stApp { background-image: url("https://i.pinimg.com/1200x/98/e6/3a/98e63a54b4d187919663cfaec2a844c0.jpg"); background-size: cover; background-attachment: fixed; }
+    .stApp { background-image: url("https://i.pinimg.com/736x/f9/a0/7d/f9a07dfe247f687b5f8e760fef45ccba.jpg"); background-size: cover; background-attachment: fixed; }
     .stApp > div:first-child { background-color: rgba(0, 0, 0, 0.9); min-height: 100vh; }
     @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
     .error-box { animation: shake 0.2s; border: 3px solid #ff4b4b !important; box-shadow: 0 0 30px #ff4b4b !important; }
