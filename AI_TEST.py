@@ -10,35 +10,47 @@ GROQ_API_KEY = "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"
 
 def generate_with_groq(text_input, mode):
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-    safe_text = text_input[:15000].replace('"', "'")
+    # تقليل الحجم قليلاً لضمان عدم حدوث Rate Limit والحصول على استجابة كاملة
+    safe_text = text_input[:120000].replace('"', "'")
     
-    # تحديد التعليمات بناءً على الخيار المختار
     if mode == "Solved Q&A Bank":
-        instruction = "This text is a solved Q&A bank. Extract the questions and their correct answers. Return ONLY a JSON array."
+        instruction = "Extract questions and their correct answers from this solved bank."
     elif mode == "Unsolved Q&A Bank":
-        instruction = "This text is a question bank WITHOUT answers. Solve it yourself and provide the correct answers. Return ONLY a JSON array."
+        instruction = "Solve this question bank and provide the correct answers."
     else: 
-        instruction = "Act as an expert professor. Generate the MAXIMUM possible number of MCQs ""covering every single detail and concept in this lecture. ""Everything MUST be in English language only."
+        # تحسين تعليمات الخيار الثالث لضمان جودة الأسئلة
+        instruction = (
+            "You are an academic expert. Based on the provided lecture text, generate 20 to 30 high-quality MCQs. "
+            "Ensure the questions cover different parts of the text. "
+            "Each question must have 4 clear options and one definitive correct answer."
+        )
 
     prompt = (
         f"{instruction} "
-        "Format: [{\"question\": \"...\", \"options\": [\"Option 1\", \"Option 2\"], \"answer\": \"Option 1\"}]. "
-        f"Text: {safe_text}"
+        "IMPORTANT: You MUST return ONLY a valid JSON array. Do not include any introductory or concluding text. "
+        "Format: [{\"question\": \"...\", \"options\": [\"Option A\", \"Option B\", \"Option C\", \"Option D\"], \"answer\": \"Option A\"}]. "
+        f"Text to analyze: {safe_text}"
     )
     
     payload = {
         "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.2
+        "temperature": 0.3 # رفعنا الـ temperature قليلاً للإبداع في صياغة الأسئلة من المحاضرة
     }
     
     try:
-        # تصحيح رابط الـ API للرابط الرسمي لـ Groq
-        response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
-        content = response.json()['choices'][0]['message']['content'].strip()
-        match = re.search(r'\[.*\]', content, re.DOTALL)
-        return json.loads(match.group(0)) if match else []
-    except: 
+        response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=40)
+        res_json = response.json()
+        
+        if 'choices' in res_json:
+            content = res_json['choices'][0]['message']['content'].strip()
+            # استخراج الـ JSON باستخدام regex لضمان عدم وجود نصوص زائدة
+            match = re.search(r'\[\s*\{.*\}\s*\]', content, re.DOTALL)
+            if match:
+                return json.loads(match.group(0))
+        return []
+    except Exception as e:
+        print(f"Error: {e}")
         return []
 
 st.set_page_config(page_title="AREF AGENT | AI VISION", layout="centered")
